@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" fill="none">
+  <defs>
+    <linearGradient id="cn-bg" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4f46e5"/>
+      <stop offset="1" stop-color="#6366f1"/>
+    </linearGradient>
+  </defs>
+  <rect width="40" height="40" rx="10" fill="url(#cn-bg)"/>
+  <path d="M20 8L24 18H22.5L21.8 16H18.2L17.5 18H16L20 8Z" fill="white" opacity="0.95"/>
+  <path d="M12 22H28V24H12V22Z" fill="white" opacity="0.9"/>
+  <text x="20" y="34" text-anchor="middle" fill="white" font-family="system-ui, sans-serif" font-size="9" font-weight="700" letter-spacing="-0.3">CN</text>
+</svg>

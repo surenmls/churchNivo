@@ -1,0 +1,1 @@
+ALTER TABLE churches ADD COLUMN IF NOT EXISTS font_family VARCHAR(50) DEFAULT 'modern';
