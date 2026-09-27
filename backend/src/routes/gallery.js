@@ -11,6 +11,7 @@ import {
   decrementUsage,
   QuotaExceededError,
 } from '../services/storageQuota.js';
+import { releaseUnusedMedia } from '../services/mediaCleanup.js';
 
 const router = Router();
 
@@ -119,10 +120,7 @@ router.patch('/:id/approve', authMiddleware, roleMiddleware('super_admin'), asyn
 router.delete('/:id', authMiddleware, roleMiddleware('super_admin', 'church_admin'), async (req, res, next) => {
   try {
     const id = parseInt(req.params.id, 10);
-    const existing = await query(
-      'SELECT church_id, file_size_bytes FROM gallery_images WHERE id = $1',
-      [id]
-    );
+    const existing = await query('SELECT * FROM gallery_images WHERE id = $1', [id]);
     if (existing.rows.length === 0) return res.status(404).json({ error: 'Not found' });
     if (req.user.role === 'church_admin' && req.user.church_id !== existing.rows[0].church_id) {
       return res.status(403).json({ error: 'Access denied' });
@@ -130,6 +128,7 @@ router.delete('/:id', authMiddleware, roleMiddleware('super_admin', 'church_admi
 
     await query('DELETE FROM gallery_images WHERE id = $1', [id]);
     await decrementUsage(existing.rows[0].church_id, existing.rows[0].file_size_bytes || 0);
+    releaseUnusedMedia(existing.rows[0]);
 
     res.json({ message: 'Deleted' });
   } catch (err) {

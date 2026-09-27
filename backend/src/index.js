@@ -26,13 +26,16 @@ import notificationRoutes from './routes/notifications.js';
 import adminRoutes from './routes/admin.js';
 import { startNotificationScheduler } from './services/scheduler.js';
 import { verifyEmailConfig, isEmailConfigured } from './services/email.js';
+import { isStorageConfigured, publicObjectUrl } from './services/objectStorage.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
-  contentSecurityPolicy: env.isProduction ? undefined : false,
+  contentSecurityPolicy: env.isProduction
+    ? { directives: { imgSrc: ["'self'", 'data:', 'blob:', ...(env.supabase.url ? [env.supabase.url] : [])] } }
+    : false,
 }));
 
 app.use(cors({
@@ -53,6 +56,15 @@ if (!fs.existsSync(env.uploadDir)) {
   fs.mkdirSync(env.uploadDir, { recursive: true });
 }
 app.use('/uploads', express.static(env.uploadDir));
+
+app.get('/media/*', (req, res) => {
+  const objectPath = req.params[0];
+  if (!objectPath || objectPath.split('/').includes('..') || !isStorageConfigured()) {
+    return res.status(404).end();
+  }
+  res.set('Cache-Control', 'public, max-age=86400');
+  res.redirect(302, publicObjectUrl(objectPath));
+});
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

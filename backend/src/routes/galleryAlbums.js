@@ -5,6 +5,7 @@ import { authMiddleware } from '../middleware/auth.js';
 import { roleMiddleware } from '../middleware/role.js';
 import { validate } from '../middleware/validate.js';
 import { reconcileUsage } from '../services/storageQuota.js';
+import { releaseUnusedMedia } from '../services/mediaCleanup.js';
 import { notifyContentPublished } from '../services/notifications.js';
 import { env } from '../config/env.js';
 
@@ -163,7 +164,7 @@ router.put(
   async (req, res, next) => {
     try {
       const id = parseInt(req.params.id, 10);
-      const existing = await query('SELECT church_id FROM gallery_albums WHERE id = $1', [id]);
+      const existing = await query('SELECT * FROM gallery_albums WHERE id = $1', [id]);
       if (existing.rows.length === 0) return res.status(404).json({ error: 'Not found' });
 
       if (req.user.role === 'church_admin' && req.user.church_id !== existing.rows[0].church_id) {
@@ -199,6 +200,7 @@ router.put(
         [title, slug, year, cover_image_url, is_featured, featured_order, is_default_landing, linked_event_id, id]
       );
 
+      releaseUnusedMedia(existing.rows[0]);
       res.json(result.rows[0]);
     } catch (err) {
       if (err.code === '23505') {
@@ -236,13 +238,15 @@ router.patch('/:id/approve', authMiddleware, roleMiddleware('super_admin'), asyn
 router.delete('/:id', authMiddleware, roleMiddleware('super_admin', 'church_admin'), async (req, res, next) => {
   try {
     const id = parseInt(req.params.id, 10);
-    const existing = await query('SELECT church_id FROM gallery_albums WHERE id = $1', [id]);
+    const existing = await query('SELECT * FROM gallery_albums WHERE id = $1', [id]);
     if (existing.rows.length === 0) return res.status(404).json({ error: 'Not found' });
     if (req.user.role === 'church_admin' && req.user.church_id !== existing.rows[0].church_id) {
       return res.status(403).json({ error: 'Access denied' });
     }
+    const albumImages = await query('SELECT image_url FROM gallery_images WHERE album_id = $1', [id]);
     await query('DELETE FROM gallery_albums WHERE id = $1', [id]);
     await reconcileUsage(existing.rows[0].church_id);
+    releaseUnusedMedia(existing.rows[0], albumImages.rows);
     res.json({ message: 'Deleted' });
   } catch (err) {
     next(err);

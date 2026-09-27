@@ -5,6 +5,7 @@ import { authMiddleware } from '../middleware/auth.js';
 import { roleMiddleware } from '../middleware/role.js';
 import { validate } from '../middleware/validate.js';
 import { notifyContentPublished } from '../services/notifications.js';
+import { releaseUnusedMedia } from '../services/mediaCleanup.js';
 import { env } from '../config/env.js';
 
 const router = Router();
@@ -156,6 +157,7 @@ router.put(
          WHERE id = $6 RETURNING *`,
         [title, content, image, nextStartsAt, nextExpiresAt, id]
       );
+      releaseUnusedMedia(row);
       res.json(result.rows[0]);
     } catch (err) {
       next(err);
@@ -185,12 +187,13 @@ router.patch('/:id/approve', authMiddleware, roleMiddleware('super_admin'), asyn
 router.delete('/:id', authMiddleware, roleMiddleware('super_admin', 'church_admin'), async (req, res, next) => {
   try {
     const id = parseInt(req.params.id, 10);
-    const existing = await query('SELECT church_id FROM announcements WHERE id = $1', [id]);
+    const existing = await query('SELECT * FROM announcements WHERE id = $1', [id]);
     if (existing.rows.length === 0) return res.status(404).json({ error: 'Not found' });
     if (req.user.role === 'church_admin' && req.user.church_id !== existing.rows[0].church_id) {
       return res.status(403).json({ error: 'Access denied' });
     }
     await query('DELETE FROM announcements WHERE id = $1', [id]);
+    releaseUnusedMedia(existing.rows[0]);
     res.json({ message: 'Deleted' });
   } catch (err) {
     next(err);

@@ -4,6 +4,7 @@ import { query } from '../config/db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { roleMiddleware } from '../middleware/role.js';
 import { validate } from '../middleware/validate.js';
+import { releaseUnusedMedia } from '../services/mediaCleanup.js';
 
 const router = Router();
 
@@ -224,6 +225,7 @@ router.put(
         ]
       );
 
+      releaseUnusedMedia(row);
       res.json(result.rows[0]);
     } catch (err) {
       next(err);
@@ -266,7 +268,7 @@ router.patch(
 router.delete('/:id', authMiddleware, roleMiddleware('super_admin', 'church_admin'), async (req, res, next) => {
   try {
     const postId = parseInt(req.params.id, 10);
-    const existing = await query('SELECT church_id FROM blog_posts WHERE id = $1', [postId]);
+    const existing = await query('SELECT * FROM blog_posts WHERE id = $1', [postId]);
     if (existing.rows.length === 0) {
       return res.status(404).json({ error: 'Post not found' });
     }
@@ -276,6 +278,7 @@ router.delete('/:id', authMiddleware, roleMiddleware('super_admin', 'church_admi
     }
 
     await query('DELETE FROM blog_posts WHERE id = $1', [postId]);
+    releaseUnusedMedia(existing.rows[0]);
     res.json({ message: 'Post deleted' });
   } catch (err) {
     next(err);

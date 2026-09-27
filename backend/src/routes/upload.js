@@ -1,28 +1,14 @@
 import { Router } from 'express';
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
-import { fileURLToPath } from 'url';
+import sharp from 'sharp';
 import { v4 as uuidv4 } from 'uuid';
 import { env } from '../config/env.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { roleMiddleware } from '../middleware/role.js';
 import { checkUploadAllowed, QuotaExceededError } from '../services/storageQuota.js';
+import { uploadObject } from '../services/objectStorage.js';
 
 const router = Router();
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-if (!fs.existsSync(env.uploadDir)) {
-  fs.mkdirSync(env.uploadDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, env.uploadDir),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `${uuidv4()}${ext}`);
-  },
-});
 
 const fileFilter = (req, file, cb) => {
   const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
@@ -33,8 +19,22 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
+const MAX_DIMENSION = 1600;
+
+async function optimizeImage(file) {
+  if (file.mimetype === 'image/gif') {
+    return { buffer: file.buffer, contentType: file.mimetype, ext: '.gif' };
+  }
+  const buffer = await sharp(file.buffer)
+    .rotate()
+    .resize({ width: MAX_DIMENSION, height: MAX_DIMENSION, fit: 'inside', withoutEnlargement: true })
+    .webp({ quality: 80 })
+    .toBuffer();
+  return { buffer, contentType: 'image/webp', ext: '.webp' };
+}
+
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   fileFilter,
   limits: { fileSize: env.uploadMaxMb * 1024 * 1024 },
 });
@@ -56,15 +56,19 @@ router.post(
       return res.status(400).json({ error: 'No image file provided' });
     }
 
+    let image;
+    try {
+      image = await optimizeImage(req.file);
+    } catch {
+      return res.status(400).json({ error: 'This file could not be read as an image' });
+    }
+
     const countsTowardQuota = req.body.count_quota === 'true' || req.body.count_quota === '1';
 
     if (countsTowardQuota && req.user.role === 'church_admin' && req.user.church_id) {
       try {
-        await checkUploadAllowed(req.user.church_id, req.file.size);
+        await checkUploadAllowed(req.user.church_id, image.buffer.length);
       } catch (err) {
-        if (req.file.path && fs.existsSync(req.file.path)) {
-          fs.unlinkSync(req.file.path);
-        }
         if (err instanceof QuotaExceededError) {
           return res.status(403).json({ error: err.message, code: err.code });
         }
@@ -72,12 +76,20 @@ router.post(
       }
     }
 
-    const url = `${env.apiPublicUrl}/uploads/${req.file.filename}`;
-    res.status(201).json({
-      url,
-      filename: req.file.filename,
-      size: req.file.size,
-    });
+    const folder = req.user.church_id ? `church-${req.user.church_id}` : 'platform';
+    const filename = `${uuidv4()}${image.ext}`;
+
+    try {
+      const url = await uploadObject(`${folder}/${filename}`, image.buffer, image.contentType);
+      res.status(201).json({
+        url,
+        filename,
+        size: image.buffer.length,
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(502).json({ error: 'Could not save the image. Please try again.' });
+    }
   }
 );
 

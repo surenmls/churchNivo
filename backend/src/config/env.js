@@ -23,6 +23,11 @@ export const env = {
   baseDomain: process.env.BASE_DOMAIN || 'localhost',
   uploadDir: process.env.UPLOAD_DIR || path.join(__dirname, '../../uploads'),
   uploadMaxMb: parseInt(process.env.UPLOAD_MAX_MB || '5', 10),
+  supabase: {
+    url: URL.canParse(process.env.SUPABASE_URL || '') ? new URL(process.env.SUPABASE_URL).origin : '',
+    serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+    bucket: process.env.SUPABASE_STORAGE_BUCKET || '',
+  },
   smtp: {
     host: process.env.SMTP_HOST || '',
     port: parseInt(process.env.SMTP_PORT || '587', 10),

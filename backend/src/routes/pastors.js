@@ -4,6 +4,7 @@ import { query } from '../config/db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { roleMiddleware } from '../middleware/role.js';
 import { validate } from '../middleware/validate.js';
+import { releaseUnusedMedia } from '../services/mediaCleanup.js';
 
 const router = Router();
 
@@ -69,7 +70,7 @@ router.put(
   async (req, res, next) => {
     try {
       const pastorId = parseInt(req.params.id, 10);
-      const existing = await query('SELECT church_id FROM pastors WHERE id = $1', [pastorId]);
+      const existing = await query('SELECT * FROM pastors WHERE id = $1', [pastorId]);
 
       if (existing.rows.length === 0) {
         return res.status(404).json({ error: 'Pastor not found' });
@@ -94,6 +95,7 @@ router.put(
         [name, title, photo, bio, sort_order, pastorId]
       );
 
+      releaseUnusedMedia(existing.rows[0]);
       res.json(result.rows[0]);
     } catch (err) {
       next(err);
@@ -104,7 +106,7 @@ router.put(
 router.delete('/:id', authMiddleware, roleMiddleware('super_admin', 'church_admin'), async (req, res, next) => {
   try {
     const pastorId = parseInt(req.params.id, 10);
-    const existing = await query('SELECT church_id FROM pastors WHERE id = $1', [pastorId]);
+    const existing = await query('SELECT * FROM pastors WHERE id = $1', [pastorId]);
 
     if (existing.rows.length === 0) {
       return res.status(404).json({ error: 'Pastor not found' });
@@ -115,6 +117,7 @@ router.delete('/:id', authMiddleware, roleMiddleware('super_admin', 'church_admi
     }
 
     await query('DELETE FROM pastors WHERE id = $1', [pastorId]);
+    releaseUnusedMedia(existing.rows[0]);
     res.json({ message: 'Pastor removed' });
   } catch (err) {
     next(err);

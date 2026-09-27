@@ -5,6 +5,7 @@ import { authMiddleware } from '../middleware/auth.js';
 import { roleMiddleware } from '../middleware/role.js';
 import { churchResolverMiddleware, requireResolvedChurch } from '../middleware/churchResolver.js';
 import { validate } from '../middleware/validate.js';
+import { releaseUnusedMedia } from '../services/mediaCleanup.js';
 
 const router = Router();
 
@@ -167,6 +168,8 @@ router.put(
         ? JSON.stringify(Array.isArray(hero_slides) ? hero_slides : [])
         : undefined;
 
+      const previous = await query('SELECT logo, banner, hero_slides FROM churches WHERE id = $1', [churchId]);
+
       const result = await query(
         `UPDATE churches SET
           name = COALESCE($1, name),
@@ -205,6 +208,7 @@ router.put(
         return res.status(404).json({ error: 'Church not found' });
       }
 
+      releaseUnusedMedia(previous.rows[0]);
       res.json(result.rows[0]);
     } catch (err) {
       next(err);
