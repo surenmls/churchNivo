@@ -28,6 +28,13 @@ export const env = {
     serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
     bucket: process.env.SUPABASE_STORAGE_BUCKET || '',
   },
+  get mediaPublicUrl() {
+    if (process.env.MEDIA_PUBLIC_URL) return process.env.MEDIA_PUBLIC_URL.replace(/\/+$/, '');
+    if (this.supabase.url && this.supabase.bucket) {
+      return `${this.supabase.url}/storage/v1/object/public/${this.supabase.bucket}`;
+    }
+    return '';
+  },
   smtp: {
     host: process.env.SMTP_HOST || '',
     port: parseInt(process.env.SMTP_PORT || '587', 10),

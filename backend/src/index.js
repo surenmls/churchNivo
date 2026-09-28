@@ -27,6 +27,7 @@ import adminRoutes from './routes/admin.js';
 import { startNotificationScheduler } from './services/scheduler.js';
 import { verifyEmailConfig, isEmailConfigured } from './services/email.js';
 import { isStorageConfigured, publicObjectUrl } from './services/objectStorage.js';
+import { mediaUrlMiddleware } from './services/mediaUrls.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -34,7 +35,7 @@ const app = express();
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
   contentSecurityPolicy: env.isProduction
-    ? { directives: { imgSrc: ["'self'", 'data:', 'blob:', ...(env.supabase.url ? [env.supabase.url] : [])] } }
+    ? { directives: { imgSrc: ["'self'", 'data:', 'blob:', ...(env.mediaPublicUrl ? [new URL(env.mediaPublicUrl).origin] : [])] } }
     : false,
 }));
 
@@ -51,6 +52,7 @@ app.use(cors({
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+app.use(mediaUrlMiddleware());
 
 if (!fs.existsSync(env.uploadDir)) {
   fs.mkdirSync(env.uploadDir, { recursive: true });
